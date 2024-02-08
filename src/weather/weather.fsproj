@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="std.fs" />
+    <Compile Include="lib.fs" />
+    <Compile Include="program.fs" />
+  </ItemGroup>
+</Project>
