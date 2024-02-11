@@ -1,27 +1,67 @@
-﻿open weather.lib
-open weather.lib.Http
+﻿open System
 
-let httpBin () = task {
+open weather.lib
+open std
+
+type InvalidCliArgumentsException() =
+    inherit InvalidOperationException()
+
+let invalidCliArgs () =
+    raise <| InvalidCliArgumentsException()
+
+let printUsage () =
+    let message = """usage:
+weather address"""
+    printfn "%s" message
+
+let addressOfArgv (argv: string[]) =
+    match argv with
+    | [|_program; address|] -> address
+    | _ -> invalidCliArgs ()
+
+let headAsync address = task {
+
+    let! struct (lat, lon) =
+        GeoCode.coordinates address
+
+    let tmp = Solunar.exec lat lon
+    printfn "%A" tmp
     
-    let headers =
-        [ pair<_, _> "accept" "*/*" ]
+    
+    let! (forecastUri, forecastZone) =
+        Weather.gridInfo lat lon
+    let! forecast = 
+        Weather.gridForecast forecastUri
+    let! pressure =
+        Weather.barometricPressure lat lon
+    let! alerts =
+        Weather.alerts forecastZone
 
-    let req =
-        HttpRequest.construct "POST" "https://httpbin.org/post"
-        |> HttpRequest.proxy "http://localhost:8080/"
-        |> HttpRequest.headers headers
-        |> HttpRequest.contentStr "hello=world"
+    printfn "%A" forecast.properties.periods[0]
+    printfn "%s" pressure
+    printfn "%A" alerts
 
-    let! resp = Http.retrieve req
-    printfn "%A" resp.StatusCode
     return ()
+
 }
 
-let head argv =
-    httpBin().GetAwaiter().GetResult()
+let head (argv: string []) =
+    
+    let address = addressOfArgv argv    
+
+    
+
+    let task = headAsync address
+    task.GetAwaiter().GetResult()
+    
     printfn "hello world"
     0
 
-Env.argv ()
-|> head
-|> Env.exit
+try
+    Env.argv ()
+    |> head
+    |> Env.exit
+with
+| :? InvalidCliArgumentsException ->
+    printUsage ()
+    Env.exit 1
