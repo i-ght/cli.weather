@@ -24,6 +24,12 @@ let headAsync address = task {
     let! struct (lat, lon) =
         GeoCode.coordinates address
 
+    printfn "%O, %O" lat lon
+
+    let jd = Celestial.julianDay DateTimeOffset.Now
+    let tmp2 = Celestial.calcSunriseSet true jd lat lon (Celestial.tzOffset DateTimeOffset.Now.Offset)
+    printfn "%A" tmp2
+
     let tmp = Solunar.exec lat lon
     printfn "%A" tmp
     
