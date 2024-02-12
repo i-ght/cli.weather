@@ -164,12 +164,12 @@ module Http =
 
 module Celestial =
     (* translated from https://gml.noaa.gov/grad/solcalc/ *)
-    
+
     [<AutoOpen>]
     module internal Convenience =
 
         let radToDeg (angleRad: float) =
-            180.0 * angleRad / System.Math.PI
+            180.0 * angleRad / Math.PI
 
         let degToRad (angleDeg: float) =
             Math.PI * angleDeg / 180.0
@@ -214,7 +214,6 @@ module Celestial =
             let O = l0 + c
             O
 
-
         let calcSunApparentLong (t: float) : float =
             let o = calcSunTrueLong t
             let omega = 125.04 - 1934.136 * t
@@ -225,7 +224,6 @@ module Celestial =
             let m = calcGeomMeanAnomalySun t
             let c = calcSunEqOfCenter t
             m + c
-
 
         let calcSunDeclination (t: float) : float =
             let e = calcObliquityCorrection t
@@ -250,7 +248,6 @@ module Celestial =
                 else
                     -20.774 / te / 3600.0
 
-
         let calcEquationOfTime (t: float) =
             let epsilon = calcObliquityCorrection t
             let l0 = calcGeomMeanLongSun t
@@ -269,7 +266,6 @@ module Celestial =
 
             let Etime = y * sin2l0 - 2.0 * e * sinm + 4.0 * e * y * sinm * cos2l0 - 0.5 * y * y * sin4l0 - 1.25 * e * e * sin2m
             radToDeg Etime * 4.0 // in minutes of time
-
 
         let calcAzEl (T: float) (localtime: float) (latitude: float) (longitude: float) (zone: float) =
             let eqTime = calcEquationOfTime T
@@ -294,7 +290,7 @@ module Celestial =
             let azDenom = cos(degToRad latitude) * sin(degToRad zenith)
 
             let mutable azimuth =
-                if Math.Abs azDenom > 0.001 then
+                if abs azDenom > 0.001 then
                     let azRad = ((sin(degToRad latitude) * cos(degToRad zenith)) - sin(degToRad theta)) / azDenom
                     let clampedAzRad = min (max azRad (-1.0)) 1.0
                     let tempAzimuth = 180.0 - radToDeg (Math.Acos clampedAzRad)
@@ -342,8 +338,6 @@ module Celestial =
             let delta = longitude + radToDeg hourAngle'
             let timeUTC = 720.0 - (4.0 * delta) - eqTime  // in minutes
             timeUTC
-
-
 
     let julianDay (date: DateTimeOffset) =
         let struct (year, month, day) =
