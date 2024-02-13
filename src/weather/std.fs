@@ -173,7 +173,7 @@ module Celestial =
 
         let degToRad (angleDeg: float) =
             Math.PI * angleDeg / 180.0
-
+(* 
         let calcGeomMeanLongSun (t: float) : float =
             let mutable L0 = 280.46646 + t * (36000.76983 + t * (0.0003032))
             while L0 > 360.0 do
@@ -181,6 +181,14 @@ module Celestial =
             while L0 < 0.0 do
                 L0 <- L0 + 360.0
             L0
+*)        
+        let calcGeomMeanLongSun (t: float) : float =
+            let L0 = 280.46646 + t * (36000.76983 + t * (0.0003032))
+            let rec adjustToRange l =
+                if l >= 360.0 then adjustToRange (l - 360.0)
+                elif l < 0.0 then adjustToRange (l + 360.0)
+                else l
+            adjustToRange L0
 
         let calcEccentricityEarthOrbit (t: float) : float =
             0.016708634 - t * (0.000042037 + 0.0000001267 * t)
@@ -272,44 +280,36 @@ module Celestial =
             let theta = calcSunDeclination T
 
             let solarTimeFix = eqTime + 4.0 * longitude - 60.0 * zone
-            let earthRadVec = calcSunRadVector T
-            let mutable trueSolarTime = localtime + solarTimeFix
-            while trueSolarTime > 1440.0 do
-                trueSolarTime <- trueSolarTime - 1440.0
+            let trueSolarTime = (localtime + solarTimeFix) % 1440.0
 
             let hourAngle = trueSolarTime / 4.0 - 180.0
-            let mutable haRad = degToRad hourAngle
+            let haRad = degToRad hourAngle
 
-            if haRad < -180.0 then
-                haRad <- haRad + 360.0
+            let csz = sin (degToRad latitude) * sin (degToRad theta) + cos (degToRad latitude) * cos (degToRad theta) * cos haRad
 
-            let csz = sin(degToRad latitude) * sin(degToRad theta) + cos(degToRad latitude) * cos(degToRad theta) * cos(haRad)
+            let zenith = radToDeg (acos (min (max csz (-1.0)) 1.0))
 
-            let mutable zenith = radToDeg (acos (min (max csz (-1.0)) 1.0))
+            let azDenom = cos (degToRad latitude) * sin (degToRad zenith)
 
-            let azDenom = cos(degToRad latitude) * sin(degToRad zenith)
-
-            let mutable azimuth =
+            let azimuth =
                 if abs azDenom > 0.001 then
-                    let azRad = ((sin(degToRad latitude) * cos(degToRad zenith)) - sin(degToRad theta)) / azDenom
+                    let azRad = ((sin (degToRad latitude) * cos (degToRad zenith)) - sin (degToRad theta)) / azDenom
                     let clampedAzRad = min (max azRad (-1.0)) 1.0
-                    let tempAzimuth = 180.0 - radToDeg (Math.Acos clampedAzRad)
+                    let tempAzimuth = 180.0 - radToDeg (acos clampedAzRad)
                     if hourAngle > 0.0 then -tempAzimuth else tempAzimuth
                 else
                     if latitude > 0.0 then 180.0 else 0.0
 
-            if azimuth < 0.0 then
-                azimuth <- azimuth + 360.0
+            let azimuth = (azimuth + 360.0) % 360.0
 
             let exoatmElevation = 90.0 - zenith
 
-            // Atmospheric Refraction correction
             let refractionCorrection = calcRefraction exoatmElevation
 
             let solarZen = zenith - refractionCorrection
             let elevation = 90.0 - solarZen
 
-            azimuth, elevation
+            struct (azimuth, elevation)
 
         let calcTimeJulianCent julianDay =
             (julianDay - 2451545.0) / 36525.0
@@ -339,41 +339,79 @@ module Celestial =
             let timeUTC = 720.0 - (4.0 * delta) - eqTime  // in minutes
             timeUTC
 
-    let julianDay (date: DateTimeOffset) =
-        let struct (year, month, day) =
-            if date.Month <= 2 then
-                struct (date.Year - 1, date.Month + 12, date.Day)
-            else
-                struct (date.Year, date.Month, date.Day)
 
-        let struct (year, month, day) =
-            (float year, float month, float day)
+        let zeroPad (value: float) (length: int) =
+            let stringValue = value.ToString()
+            if stringValue.Length >= length then stringValue
+            else stringValue.PadLeft(length, '0')
 
-        let a = floor (year / 100.0)
-        let b = 2.0 - a + floor (a / 4.0)
-        // 	var JD = Math.floor(365.25*(year + 4716)) + Math.floor(30.6001*(month+1)) + day + B - 1524.5
-        let jd =
-            floor (365.25 * (year + 4716.0) + floor(30.6001 * (month + 1.0))) + day + b - 1524.5
-        jd
+        let timeString (minutes: float) (flag: int) =
+            if minutes >= 0.0 && minutes < 1440.0 then
+                let floatHour = minutes / 60.0
+                let hour = floor floatHour
+                let floatMinute = 60.0 * (floatHour - hour)
+                let minute = floor floatMinute
+                let floatSec = 60.0 * (floatMinute - minute)
+                let second = floor (floatSec + 0.5)
+                let adjustedMinute = if second > 59.0 then minute + 1.0 else minute
+                let adjustedHour = if adjustedMinute > 59.0 then hour + 1.0 else hour
+                let output =
+                    match flag with
+                    | 2 when second >= 30.0 -> zeroPad adjustedHour 2 + ":" + zeroPad (adjustedMinute + 1.0) 2
+                    | _ -> zeroPad adjustedHour 2 + ":" + zeroPad adjustedMinute 2 + (if flag > 2 then ":" + zeroPad second 2 else "")
+                output
+            else "error"
 
-    let tzOffset (utcOffset: TimeSpan) : float =
-        let hours = float utcOffset.Hours
-        let minutes = float utcOffset.Minutes
-        let tz = hours + minutes / 60.0
-        tz
 
-    let calcSunriseSet (rise: bool) (JD: float) (latitude: float) (longitude: float) (timezone: float) =
-        let timeUTC = calcSunriseSetUTC rise JD latitude longitude
-        let newTimeUTC = calcSunriseSetUTC rise (JD + timeUTC / 1440.0) latitude longitude
-        let azimuth, timeLocal, jday =
-            let mutable timeLocal = newTimeUTC + (timezone * 60.0)
+        let julianDay (date: DateTimeOffset) =
+            let struct (year, month, day) =
+                if date.Month <= 2 then
+                    struct (date.Year - 1, date.Month + 12, date.Day)
+                else
+                    struct (date.Year, date.Month, date.Day)
+
+            let struct (year, month, day) =
+                (float year, float month, float day)
+
+            let a = floor (year / 100.0)
+            let b = 2.0 - a + floor (a / 4.0)
+    
+            let jd =
+                floor (365.25 * (year + 4716.0) + floor(30.6001 * (month + 1.0))) + day + b - 1524.5
+            jd
+
+        let minutesToDateTimeOffset (minutes: float): DateTimeOffset =
+            let today = DateTimeOffset.Now.Date
+            let timeSpan = TimeSpan.FromMinutes(minutes)
+            DateTimeOffset(today.Add(timeSpan))
+
+        let tzOffset (date: DateTimeOffset) : float =
+            let utcOffset = date.Offset 
+            let hours = float utcOffset.Hours
+            let minutes = float utcOffset.Minutes
+            let tz = hours + minutes / 60.0
+            tz
+
+        let calcSunriseSet (rise: bool) (JD: float) (latitude: float) (longitude: float) (timezone: float) =
+            let timeUTC = calcSunriseSetUTC rise JD latitude longitude
+            let newTimeUTC = calcSunriseSetUTC rise (JD + timeUTC / 1440.0) latitude longitude
+
+            let rec adjustTime (timeLocal: float) (jday: float) =
+                match timeLocal with
+                | t when t >= 0.0 && t < 1440.0 -> (jday, floor t)
+                | t when t < 0.0 -> adjustTime (t + 1440.0) (jday - 1.0)
+                | t -> adjustTime (t - 1440.0) (jday + 1.0)
+
             let riseT = calcTimeJulianCent (JD + newTimeUTC / 1440.0)
-            let (azimuth, _elevation) = calcAzEl riseT timeLocal latitude longitude timezone
-            let mutable jday = JD
-            if timeLocal < 0.0 || timeLocal >= 1440.0 then
-                let increment = if timeLocal < 0 then 1 else -1
-                while timeLocal < 0.0 || timeLocal >= 1440.0 do
-                    timeLocal <- timeLocal + float increment * 1440.0
-                    jday <- jday - float increment
-            jday, timeLocal, azimuth
-        jday, timeLocal, azimuth
+            let struct (azimuth, _elevation) = calcAzEl riseT (newTimeUTC + timezone * 60.0) latitude longitude timezone
+            let (jday, timeLocal) = adjustTime (newTimeUTC + timezone * 60.0) JD
+            struct (azimuth, timeLocal, jday)
+
+
+    let sunrise lat lon date =
+        let offset = tzOffset date
+        let jd = julianDay date
+        let struct (jday, timeLocal, azimuth) = 
+            calcSunriseSet true jd lat lon offset
+        
+        minutesToDateTimeOffset timeLocal
