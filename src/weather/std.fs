@@ -81,13 +81,6 @@ module Http =
         let urlEncodeSeq (seq: StringPair seq) =
             String.Join("&", Seq.map urlEncodePair seq)
 
-    module HttpMethod =
-        let HEAD = "HEAD"
-        let GET = "GET"
-        let POST = "POST"
-        let PUT = "PUT"
-        let DELETE = "DELETE"
-
     module HttpRequest =
         let construct method uri =
             { Method=method;
