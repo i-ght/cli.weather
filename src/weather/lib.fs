@@ -132,6 +132,7 @@ module Weather =
         )
 
     let barometricPressure (lat: double) (lon: double) = task {
+        invalidOp "they don't like this"
         (* https://forecast.weather.gov/MapClick.php?lat=38.29595769399183&lon=-104.58785803656497 *)
         let query =
             [ pair<_,_> "lat" <| string lat 
@@ -144,7 +145,7 @@ module Weather =
 
         let req =
             req "GET" uri
-            |> HttpRequest.headers [ pair<_,_> "User-Agent" "weather" ]
+            |> HttpRequest.headers [ pair<_,_> "User-Agent" "weather toph.ght@gmail.com" ]
 
         let! resp = Http.retrieve req
         ensureOK resp
@@ -161,12 +162,14 @@ module Weather =
 
     let gridInfo (lat: double) (lon: double) = task {
 
+        let struct (lat, lon) =
+            (Double.Round(lat, 4), Double.Round(lon, 4))
         let path = $"/points/{lat},{lon}"
         let uri = $"https://{ApiAuthority}{path}"
 
         let req =
             req "GET" uri
-            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather"]
+            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
 
         let! resp = Http.retrieve req
         ensureOK resp
@@ -185,7 +188,7 @@ module Weather =
 
         let req =
             req "GET" uri
-            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather"]
+            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
 
         let! resp = Http.retrieve req
         ensureOK resp
@@ -203,7 +206,7 @@ module Weather =
 
         let req =
             req "GET" uri
-            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather"]
+            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
 
         let! resp = Http.retrieve req
         ensureOK resp
@@ -229,6 +232,7 @@ type CelestialData =
 module Solunar =
     open System.Diagnostics
     open System.Text.RegularExpressions
+
 
     let private dataRegex =
         Regex(

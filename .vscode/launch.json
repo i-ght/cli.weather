@@ -10,7 +10,7 @@
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/src/weather/bin/Debug/net8.0/weather.dll",
-            "args": ["1007 RUPPEL ST, PUEBLO, CO, 81001"],
+            "args": [""],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "internalConsole"

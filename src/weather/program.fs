@@ -17,7 +17,9 @@ weather address"""
 let addressOfArgv (argv: string[]) =
     match argv with
     | [|_program; address|] -> address
-    | _ -> invalidCliArgs ()
+    | _ ->
+
+        invalidCliArgs ()
 
 let headAsync address = task {
 
@@ -27,20 +29,22 @@ let headAsync address = task {
     printfn "%O, %O" lat lon
 
     let now = DateTimeOffset.Now
-    let sunrise = Celestial.sunrise lat lon now
-    
-    
+    let events =
+        Celestial.events lat lon now
+    printfn "%A" events
+
+
     let! (forecastUri, forecastZone) =
         Weather.gridInfo lat lon
     let! forecast = 
         Weather.gridForecast forecastUri
-    let! pressure =
-        Weather.barometricPressure lat lon
+(*     let! pressure =
+        Weather.barometricPressure lat lon *)
     let! alerts =
         Weather.alerts forecastZone
 
     printfn "%A" forecast.properties.periods[0]
-    printfn "%s" pressure
+(*     printfn "%s" pressure *)
     printfn "%A" alerts
 
     return ()
@@ -49,6 +53,7 @@ let headAsync address = task {
 
 let head (argv: string []) =
     
+    let tmp = Env.var "LOCAL_ADDRESS"
     let address = addressOfArgv argv    
 
     

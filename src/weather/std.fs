@@ -26,6 +26,8 @@ module Env =
     let exit code =
         Environment.Exit(code)
 
+    let var name =
+        Environment.GetEnvironmentVariable(name)
 
 module Encoding =
 
@@ -149,6 +151,8 @@ module Http =
             use client = new HttpClient(handler)
             use req = HttpRequest.toReqMsg req
             use! resp = client.SendAsync(req)
+            resp.EnsureSuccessStatusCode()
+            |> disregard<HttpResponseMessage>
             use content = resp.Content
             let! content = content.ReadAsByteArrayAsync()
             let response = HttpResponse.ofRespMsg content resp
@@ -156,10 +160,11 @@ module Http =
         }
 
 module Celestial =
-    (* translated from https://gml.noaa.gov/grad/solcalc/ *)
 
     [<AutoOpen>]
-    module internal Convenience =
+    module internal Sol =
+
+        (* translated from https://gml.noaa.gov/grad/solcalc/ *)
 
         let radToDeg (angleRad: float) =
             180.0 * angleRad / Math.PI
@@ -391,20 +396,47 @@ module Celestial =
 
             let rec adjustTime (timeLocal: float) (jday: float) =
                 match timeLocal with
-                | t when t >= 0.0 && t < 1440.0 -> (jday, floor t)
+                | t when t >= 0.0 && t < 1440.0 -> struct (jday, t)
                 | t when t < 0.0 -> adjustTime (t + 1440.0) (jday - 1.0)
                 | t -> adjustTime (t - 1440.0) (jday + 1.0)
 
             let riseT = calcTimeJulianCent (JD + newTimeUTC / 1440.0)
             let struct (azimuth, _elevation) = calcAzEl riseT (newTimeUTC + timezone * 60.0) latitude longitude timezone
-            let (jday, timeLocal) = adjustTime (newTimeUTC + timezone * 60.0) JD
+            let struct (jday, timeLocal) = adjustTime (newTimeUTC + timezone * 60.0) JD
             struct (azimuth, timeLocal, jday)
 
+        let calcSolNoon (jd: float) (longitude: float) (timezone: float) =
+            let tnoon = calcTimeJulianCent (jd - longitude / 360.0)
+            let eqTime = calcEquationOfTime tnoon
+            let solNoonOffset = 720.0 - (longitude * 4.0) - eqTime // in minutes
+            let newt = calcTimeJulianCent (jd - 0.5 + solNoonOffset / 1440.0)
+            let eqTime = calcEquationOfTime newt
+            let solNoonLocal = 720.0 - (longitude * 4.0) - eqTime + (timezone * 60.0) // in minutes
 
-    let sunrise lat lon date =
+            let rec adjustToRange (time: float) =
+                if time < 0.0 then adjustToRange (time + 1440.0)
+                elif time >= 1440.0 then adjustToRange (time - 1440.0)
+                else time
+
+            adjustToRange solNoonLocal
+
+    [<AutoOpen>]
+    module internal Luna =
+        ()
+
+    let events lat lon date =
         let offset = tzOffset date
         let jd = julianDay date
-        let struct (jday, timeLocal, azimuth) = 
+        let struct (_, riseTimeLocal, riseAzimuth) = 
             calcSunriseSet true jd lat lon offset
+        let struct (_, setTimeLocal, setAzimuth) = 
+            calcSunriseSet false jd lat lon offset
         
-        minutesToDateTimeOffset timeLocal
+        let solNoon =
+            calcSolNoon jd lon offset
+
+        struct (
+            minutesToDateTimeOffset riseTimeLocal,
+            minutesToDateTimeOffset solNoon,
+            minutesToDateTimeOffset setTimeLocal
+        )
