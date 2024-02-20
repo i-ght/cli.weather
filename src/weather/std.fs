@@ -71,9 +71,11 @@ module Http =
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~"
 
         let urlEncode (text: string) =
-            let sb = StringBuilder(text.Length + 99)
+            let sb = StringBuilder(text.Length + 255)
             for ch in text do
-                if UnreservedHttpChars.IndexOf(ch) = -1 then
+                if ch = ' ' then
+                    sb.Append(ch) |> ignore<StringBuilder>
+                else if UnreservedHttpChars.IndexOf(ch) = -1 then
                     sb.AppendFormat("%{0:X2}", int ch)
                     |> ignore<StringBuilder>
                 else
@@ -85,7 +87,8 @@ module Http =
             $"{urlEncode a}={urlEncode b}"
 
         let urlEncodeSeq (seq: StringPair seq) =
-            String.Join("&", Seq.map urlEncodePair seq)
+            String.concat "&" 
+            <| Seq.map urlEncodePair seq
 
     module HttpRequest =
         let construct method uri =
@@ -181,7 +184,7 @@ module Celestial =
     module internal Sol =
 
         (* translated from https://gml.noaa.gov/grad/solcalc/ 
-          with help from: https://github.com/0xStarcat/CircularNatalHoroscopeJS *)
+          with a little help from my friends: https://github.com/0xStarcat/CircularNatalHoroscopeJS *)
 
         let modulo (a: float) (b: float) =
             (a % b + b) % b;
