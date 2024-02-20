@@ -458,6 +458,9 @@ module Celestial =
         let tanFromDegrees degrees =
             tan (degToRad degrees)
 
+
+    let [<Literal>] ObliquityEcliptic = 23.4367
+
     let localSiderealTime (date: DateTimeOffset) (longitude: float) =
         let jd = jdPrecise date
         let julianDaysJan1st2000 = 2451545.0
@@ -474,10 +477,11 @@ module Celestial =
         let modLst = modulo lst 360.0
         modLst
 
-    let [<Literal>] ObliquityEcliptic = 23.4367
+    let ascendant latitude longitude (date: DateTimeOffset) =
 
-    let ascendant latitude obliquityEcliptic localSiderealTime =
-
+        let localSiderealTime = localSiderealTime date longitude
+        let obliquityEcliptic = ObliquityEcliptic
+        
         let a = -cosFromDegrees localSiderealTime
         let b = sinFromDegrees obliquityEcliptic * tanFromDegrees latitude
         let c = cosFromDegrees obliquityEcliptic * sinFromDegrees localSiderealTime

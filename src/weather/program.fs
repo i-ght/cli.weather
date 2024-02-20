@@ -52,7 +52,7 @@ OR
 set environment variable LOCAL_ADDRESS
 OR
 set environment variables LAT and LON"""
-    printfn "%s" message
+    printfn $"{message}"
 
 let tryGetCliArgsOfArgv (argv: string[]) =
     match argv with
@@ -75,18 +75,15 @@ let getLatLon cliArgs = task {
 
 let rec gatherEventSigns lat lon acc events =
     match events with
-    | head :: tail ->
-        let siderealTime =
-            Celestial.localSiderealTime head lon
-        let asc =
-            Celestial.ascendant lat Celestial.ObliquityEcliptic siderealTime
+    | date :: tail ->
         gatherEventSigns
         <| lat
         <| lon
-        <| asc :: acc 
+        <| Celestial.ascendant lat lon date :: acc 
         <| tail
     | _ ->
-        acc |> List.rev
+        acc
+        |> List.rev
 
 let headAsync cliArgs = task {
 

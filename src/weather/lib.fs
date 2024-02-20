@@ -1,13 +1,14 @@
 namespace weather.lib
 
+open System
+open System.Net
+
 open std
 open std.Http
-open System
 
 (* 
 weather.gov API documentation: https://www.weather.gov/documentation/services-web-api
 geocoding.geo.census.gov API documentation: https://geocoding.geo.census.gov/geocoder/Geocoding_Services_API.html
-  OR see file Census_Geocoder_User_Guide.pdf in /doc
 *)
 
 type AddressMatchCoordinates =
@@ -19,13 +20,13 @@ type AddressMatch =
 type AddressMatchResult =
     { addressMatches: AddressMatch [] }
 
-type GeoCodeResult<'a> =
+type GeoCodeResponse<'a> =
     { result: 'a }
 
-type WeatherResult<'a> =
+type WeatherResponse<'a> =
     { properties: 'a }
 
-type WeatherPointsResult =
+type WeatherPoints =
     { fireWeatherZone: string
       forecast: string
       forecastGridData: string
@@ -72,15 +73,15 @@ type WeatherAlertData =
       response: string }
 
 type WeatherFeaturesResult<'a> =
-    { features: 'a WeatherResult [] }
+    { features: 'a WeatherResponse [] }
 
-type WeatherForecastResult =
+type WeatherForecast =
     { updated: DateTimeOffset
       periods: WeatherPeriodData [] }
 
 [<AutoOpen>]
 module internal Convenience =
-    open System.Net
+
     let ensureOK (resp: HttpResponse) =
         if resp.StatusCode <> HttpStatusCode.OK then
             invalidOp<unit> 
@@ -111,13 +112,13 @@ module GeoCode =
         ensureOK resp
 
         let result =
-            Json.deserialize<GeoCodeResult<AddressMatchResult>>
+            Json.deserialize<GeoCodeResponse<AddressMatchResult>>
             <| Http.str resp
         
 
         let ret =
-            struct ( result.result.addressMatches.[0].coordinates.y,
-                     result.result.addressMatches.[0].coordinates.x )
+            struct (result.result.addressMatches.[0].coordinates.y,
+                    result.result.addressMatches.[0].coordinates.x)
         return ret
     }
 
@@ -140,7 +141,7 @@ module Weather =
         ensureOK resp
 
         let result =
-            Json.deserialize<WeatherResult<WeatherPointsResult>> 
+            Json.deserialize<WeatherResponse<WeatherPoints>> 
             <| Http.str resp
 
         return struct (
@@ -160,7 +161,7 @@ module Weather =
         ensureOK resp
 
         let result =
-            Json.deserialize<WeatherResult<WeatherForecastResult>> 
+            Json.deserialize<WeatherResponse<WeatherForecast>> 
             <| Http.str resp
 
         return result
