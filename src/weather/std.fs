@@ -27,7 +27,11 @@ module Env =
         Environment.Exit(code)
 
     let var name =
-        Environment.GetEnvironmentVariable(name)
+        let envVar = Environment.GetEnvironmentVariable(name)
+        if envVar |> isNull then
+            ValueNone
+        else 
+            ValueSome envVar
 
 module Encoding =
 
@@ -142,7 +146,7 @@ module Http =
 
             match req.Proxy with
             | ValueSome proxy -> handler.Proxy <- WebProxy(proxy)
-            | ValueNone -> disregard<unit> ()
+            | ValueNone -> ()
 
 #if DEBUG
             handler.Proxy <- WebProxy("127.0.0.1:8080")
@@ -159,12 +163,39 @@ module Http =
             return response
         }
 
+type ZodiacSign =
+    | Aries = 0
+    | Taurus = 30
+    | Gemini = 60
+    | Cancer = 90
+    | Leo = 120
+    | Virgo = 150
+    | Libra = 180
+    | Scorpio = 210
+    | Sagittarius = 240
+    | Capricorn = 270
+    | Aquarius = 300
+    | Pisces = 330
+
 module Celestial =
 
     [<AutoOpen>]
     module internal Sol =
 
-        (* translated from https://gml.noaa.gov/grad/solcalc/ *)
+        (* translated from https://gml.noaa.gov/grad/solcalc/ 
+          with help from: https://github.com/0xStarcat/CircularNatalHoroscopeJS *)
+
+        let modulo (a: float) (b: float) =
+            (a % b + b) % b;
+        
+        let hourTimeToDecimal (date: DateTimeOffset) =
+            let struct (hour, minute)= 
+                let floats = 
+                    [date.Hour; date.Minute]
+                    |> List.map float
+                (floats[0], floats[1])
+            let timeSpan = TimeSpan.FromMinutes(hour * 60.0 + minute)
+            timeSpan.TotalHours
 
         let radToDeg (angleRad: float) =
             180.0 * angleRad / Math.PI
@@ -360,28 +391,10 @@ module Celestial =
                 output
             else "error"
 
-
-        let julianDay (date: DateTimeOffset) =
-            let struct (year, month, day) =
-                if date.Month <= 2 then
-                    struct (date.Year - 1, date.Month + 12, date.Day)
-                else
-                    struct (date.Year, date.Month, date.Day)
-
-            let struct (year, month, day) =
-                (float year, float month, float day)
-
-            let a = floor (year / 100.0)
-            let b = 2.0 - a + floor (a / 4.0)
-    
-            let jd =
-                floor (365.25 * (year + 4716.0) + floor(30.6001 * (month + 1.0))) + day + b - 1524.5
-            jd
-
-        let minutesToDateTimeOffset (minutes: float): DateTimeOffset =
-            let today = DateTimeOffset.Now.Date
+        let minutesToDateTimeOffset (date: DateTimeOffset) (minutes: float): DateTimeOffset =
+            let dt = date.Date
             let timeSpan = TimeSpan.FromMinutes(minutes)
-            DateTimeOffset(today.Add(timeSpan))
+            DateTimeOffset(dt.Add(timeSpan))
 
         let tzOffset (date: DateTimeOffset) : float =
             let utcOffset = date.Offset 
@@ -420,13 +433,115 @@ module Celestial =
 
             adjustToRange solNoonLocal
 
-    [<AutoOpen>]
-    module internal Luna =
-        ()
+
+        let jdPrecise (date: DateTimeOffset) =
+            let utc = DateTimeOffset(date.UtcDateTime)
+            let ut = hourTimeToDecimal utc
+            let struct (year, month, day) =
+                let floats =
+                    [utc.Year; utc.Month; utc.Day]
+                    |> List.map float
+                (floats[0], floats[1], floats[2])
+
+            let julianDate =
+                (367.0 * year)
+                - floor (7.0 * (year + floor ((month + 9.0) / 12.0)) / 4.0)
+                - floor (3.0 * (floor ((year + (month - 9.0) / 7.0) / 100.0) + 1.0) / 4.0)
+                + floor ((275.0 * month) / 9.0)
+                + day
+                + 1721028.5
+                + (ut / 24.0)
+
+            julianDate
+
+        let jd (date: DateTimeOffset) =
+            let struct (year, month, day) =
+                if date.Month <= 2 then
+                    struct (date.Year - 1, date.Month + 12, date.Day)
+                else
+                    struct (date.Year, date.Month, date.Day)
+
+            let struct (year, month, day) =
+                (float year, float month, float day)
+
+            let a = floor (year / 100.0)
+            let b = 2.0 - a + floor (a / 4.0)
+
+            let jd =
+                floor (365.25 * (year + 4716.0) + floor(30.6001 * (month + 1.0))) + day + b - 1524.5
+            jd
+
+        let sinFromDegrees degrees =
+            sin (degToRad degrees)
+
+        let cosFromDegrees degrees =
+            cos (degToRad degrees)
+
+        let tanFromDegrees degrees =
+            tan (degToRad degrees)
+
+    let localSiderealTime (date: DateTimeOffset) (longitude: float) =
+        let jd = jdPrecise date
+        let julianDaysJan1st2000 = 2451545.0
+        let julianDaysSince2000 = jd - julianDaysJan1st2000
+        let tFactor = julianDaysSince2000 / 36525.0 // centuries
+        let degreesRotationInSiderealDay = 360.98564736629
+        let lst =
+            280.46061837
+            + (degreesRotationInSiderealDay * julianDaysSince2000)
+            + 0.000387933 * (tFactor ** 2.0)
+            - ((tFactor ** 3.0) / 38710000.0)
+            + longitude
+
+        let modLst = modulo lst 360.0
+        modLst
+
+    let [<Literal>] ObliquityEcliptic = 23.4367
+
+    let getAscendant latitude obliquityEcliptic localSiderealTime =
+
+        let a = -cosFromDegrees localSiderealTime
+        let b = sinFromDegrees obliquityEcliptic * tanFromDegrees latitude
+        let c = cosFromDegrees obliquityEcliptic * sinFromDegrees localSiderealTime
+        let d = b + c
+        let e = a / d
+        let f = atan e
+
+        let mutable ascendant = f * 180.0 / Math.PI
+
+        // Modulation from wikipedia
+        // https://en.wikipedia.org/wiki/Ascendant
+        // Citation Peter Duffett-Smith, Jonathan Zwart, Practical astronomy with your calculator or spreadsheet-4th ed., p47, 2011
+
+        if d < 0.0 then
+            ascendant <- ascendant + 180.0
+        else
+            ascendant <- ascendant + 360.0
+
+        if ascendant >= 180.0 then
+            ascendant <- ascendant - 180.0
+        else
+            ascendant <- ascendant + 180.0
+
+        let ascendant = ascendant % 360.0
+        match ascendant with
+        | _ when ascendant >= float ZodiacSign.Pisces -> ZodiacSign.Pisces
+        | _ when ascendant >= float ZodiacSign.Aquarius -> ZodiacSign.Aquarius
+        | _ when ascendant >= float ZodiacSign.Capricorn -> ZodiacSign.Capricorn
+        | _ when ascendant >= float ZodiacSign.Sagittarius -> ZodiacSign.Sagittarius
+        | _ when ascendant >= float ZodiacSign.Scorpio -> ZodiacSign.Scorpio
+        | _ when ascendant >= float ZodiacSign.Libra -> ZodiacSign.Libra
+        | _ when ascendant >= float ZodiacSign.Virgo -> ZodiacSign.Virgo
+        | _ when ascendant >= float ZodiacSign.Leo -> ZodiacSign.Leo
+        | _ when ascendant >= float ZodiacSign.Cancer -> ZodiacSign.Cancer
+        | _ when ascendant >= float ZodiacSign.Gemini -> ZodiacSign.Gemini
+        | _ when ascendant >= float ZodiacSign.Taurus -> ZodiacSign.Taurus
+        | _ -> ZodiacSign.Aries
+
 
     let events lat lon date =
         let offset = tzOffset date
-        let jd = julianDay date
+        let jd = jd date
         let struct (_, riseTimeLocal, riseAzimuth) = 
             calcSunriseSet true jd lat lon offset
         let struct (_, setTimeLocal, setAzimuth) = 
@@ -436,7 +551,7 @@ module Celestial =
             calcSolNoon jd lon offset
 
         struct (
-            minutesToDateTimeOffset riseTimeLocal,
-            minutesToDateTimeOffset solNoon,
-            minutesToDateTimeOffset setTimeLocal
+            minutesToDateTimeOffset date riseTimeLocal,
+            minutesToDateTimeOffset date solNoon,
+            minutesToDateTimeOffset date setTimeLocal
         )

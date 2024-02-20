@@ -26,7 +26,8 @@ type WeatherResult<'a> =
     { properties: 'a }
 
 type WeatherPointsResult =
-    { forecast: string
+    { fireWeatherZone: string
+      forecast: string
       forecastGridData: string
       forecastZone: string }
 
@@ -180,7 +181,8 @@ module Weather =
 
         return struct (
             result.properties.forecast,
-            result.properties.forecastZone.Split('/') |> Seq.last
+            result.properties.forecastZone.Split('/') |> Seq.last,
+            result.properties.fireWeatherZone.Split('/') |> Seq.last
         )
     }
 
@@ -218,65 +220,3 @@ module Weather =
       
         return result
     }
-
-type CelestialData =
-    { Sunrise: DateTimeOffset
-      HighNoon: DateTimeOffset
-      Sunset: DateTimeOffset
-      Moonrise: DateTimeOffset
-      Moonset: DateTimeOffset
-      MoonPhase: double
-      MoonPhaseDesc: string
-      MoonAge: double }
-
-module Solunar =
-    open System.Diagnostics
-    open System.Text.RegularExpressions
-
-
-    let private dataRegex =
-        Regex(
-        "Sunrise\s+(\d{2}:\d{2})\s+High noon (\d{2}:\d{2})\s+.*?\s+Sunset (\d{2}:\d{2}).*?\s+Moonrise (\d{2}:\d{2})\s+Moonset (\d{2}:\d{2})\s+moon phase ([\d.]+), ([A-Za-z ]+)\s+.*?moon age ([\d.]+) days since new",
-        RegexOptions.Compiled ||| RegexOptions.IgnoreCase ||| RegexOptions.Singleline
-        )
-
-    let exec lat lon =
-        let args =
-            [ "-l"
-              $"{lat}"
-              "-o"
-              $"{lon}"
-              "-f" ]
-        let startInfo =
-            ProcessStartInfo(
-                "solunar",
-                args,
-                RedirectStandardOutput=true
-            )
-        use proc = Process.Start(startInfo)
-        proc.WaitForExit()
-        let stdout = proc.StandardOutput.ReadToEnd()
-        let m = dataRegex.Match(stdout)
-        if not m.Success then
-            invalidOp<unit> "failed to parse data from solunar"
-        
-        let sunrise = m.Groups.[1].Value |> DateTimeOffset.Parse
-        let highNoon = m.Groups.[2].Value |> DateTimeOffset.Parse
-        let sunset = m.Groups.[3].Value |> DateTimeOffset.Parse
-        let moonrise = m.Groups.[4].Value |> DateTimeOffset.Parse
-        let moonset = m.Groups.[5].Value |> DateTimeOffset.Parse
-        let moonPhase = m.Groups.[6].Value |> double
-        let moonPhaseDesc = m.Groups.[7].Value
-        let moonAge = m.Groups.[8].Value |> double
-        
-        let celestialData = 
-            { Sunrise = sunrise
-              HighNoon = highNoon
-              Sunset = sunset
-              Moonrise = moonrise
-              Moonset = moonset
-              MoonPhase = moonPhase
-              MoonPhaseDesc = moonPhaseDesc
-              MoonAge = moonAge }
-              
-        celestialData
