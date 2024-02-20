@@ -100,9 +100,6 @@ module Http =
             | "" -> { req with Proxy=ValueNone }
             | _  -> { req with Proxy=ValueSome <| Uri(proxy) }
 
-        let headers (headers: StringPair seq) (req: HttpRequest) =
-            { req with Headers=headers}
-
         let content (content: byte[]) (req: HttpRequest) =
             { req with Content=ReadOnlyMemory<byte>(content) }
 
@@ -124,19 +121,20 @@ module Http =
 
             reqMsg
 
-    module HttpResponse =
 
-        let internal ofRespMsg (content: byte[]) (response: HttpResponseMessage) =
-            { StatusCode=response.StatusCode
-              Headers=[]
-              Content=ReadOnlyMemory<byte>(content) }
-
-        let strContent (response: HttpResponse) =
-            Encoding.utf8Str response.Content.Span
-
-    let req = HttpRequest.construct
+    let internal httpRespOfRespMsg (content: byte[]) (response: HttpResponseMessage) =
+        { StatusCode=response.StatusCode
+          Headers=[]
+          Content=ReadOnlyMemory<byte>(content) }
 
     module Http =
+        let req = HttpRequest.construct
+
+        let headers (headers: StringPair seq) (req: HttpRequest) =
+            { req with Headers=headers}
+
+        let str (response: HttpResponse) =
+            Encoding.utf8Str response.Content.Span
         let retrieve (req: HttpRequest) = task {
             use handler = new HttpClientHandler()
 
@@ -159,7 +157,7 @@ module Http =
             |> disregard<HttpResponseMessage>
             use content = resp.Content
             let! content = content.ReadAsByteArrayAsync()
-            let response = HttpResponse.ofRespMsg content resp
+            let response = httpRespOfRespMsg content resp
             return response
         }
 
@@ -368,29 +366,6 @@ module Celestial =
             let timeUTC = 720.0 - (4.0 * delta) - eqTime  // in minutes
             timeUTC
 
-
-        let zeroPad (value: float) (length: int) =
-            let stringValue = value.ToString()
-            if stringValue.Length >= length then stringValue
-            else stringValue.PadLeft(length, '0')
-
-        let timeString (minutes: float) (flag: int) =
-            if minutes >= 0.0 && minutes < 1440.0 then
-                let floatHour = minutes / 60.0
-                let hour = floor floatHour
-                let floatMinute = 60.0 * (floatHour - hour)
-                let minute = floor floatMinute
-                let floatSec = 60.0 * (floatMinute - minute)
-                let second = floor (floatSec + 0.5)
-                let adjustedMinute = if second > 59.0 then minute + 1.0 else minute
-                let adjustedHour = if adjustedMinute > 59.0 then hour + 1.0 else hour
-                let output =
-                    match flag with
-                    | 2 when second >= 30.0 -> zeroPad adjustedHour 2 + ":" + zeroPad (adjustedMinute + 1.0) 2
-                    | _ -> zeroPad adjustedHour 2 + ":" + zeroPad adjustedMinute 2 + (if flag > 2 then ":" + zeroPad second 2 else "")
-                output
-            else "error"
-
         let minutesToDateTimeOffset (date: DateTimeOffset) (minutes: float): DateTimeOffset =
             let dt = date.Date
             let timeSpan = TimeSpan.FromMinutes(minutes)
@@ -498,7 +473,7 @@ module Celestial =
 
     let [<Literal>] ObliquityEcliptic = 23.4367
 
-    let getAscendant latitude obliquityEcliptic localSiderealTime =
+    let ascendant latitude obliquityEcliptic localSiderealTime =
 
         let a = -cosFromDegrees localSiderealTime
         let b = sinFromDegrees obliquityEcliptic * tanFromDegrees latitude

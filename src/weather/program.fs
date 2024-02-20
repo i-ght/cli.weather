@@ -45,21 +45,52 @@ let invalidCliArgs () =
 
 let printUsage () =
     let message = """usage:
-weather address"""
+weather address
+OR
+weather lat lon
+OR
+set environment variable LOCAL_ADDRESS
+OR
+set environment variables LAT and LON"""
     printfn "%s" message
 
-let cliArgsOfArgv (argv: string[]) =
+let tryGetCliArgsOfArgv (argv: string[]) =
     match argv with
-    | [|_program; address|] -> Address address
-    | _ -> invalidCliArgs ()
+    | [|_program; address|] ->
+        ValueSome <| Address address
+    | [|_program; lat; lon|] ->
+        ValueSome <| Coordinates (struct (float lat, float lon))
+    | _ ->
+        ValueNone
 
+let getLatLon cliArgs = task {
+    let! struct (lat, lon) =
+        match cliArgs with
+        | Coordinates (lat, lon) ->
+            task { return struct (lat, lon) }
+        | Address address ->
+            GeoCode.coordinates address
+    return struct (lat, lon)
+}
+
+let rec gatherEventSigns lat lon acc events =
+    match events with
+    | head :: tail ->
+        let siderealTime =
+            Celestial.localSiderealTime head lon
+        let asc =
+            Celestial.ascendant lat Celestial.ObliquityEcliptic siderealTime
+        gatherEventSigns
+        <| lat
+        <| lon
+        <| asc :: acc 
+        <| tail
+    | _ ->
+        acc |> List.rev
 
 let headAsync cliArgs = task {
 
-    let! struct (lat, lon) =
-        match cliArgs with
-        | Coordinates struct (lat, lon) -> task { return struct (lat, lon) }
-        | Address address -> GeoCode.coordinates address
+    let! struct (lat, lon) = getLatLon cliArgs
 
     let _ = printfn $"{lat}, {lon}"
 
@@ -71,40 +102,23 @@ let headAsync cliArgs = task {
 
     let _ = printfn "%A" events
 
-    let riseSiderealTime =
-        Celestial.localSiderealTime rise lon
-    let riseAsc =
-        Celestial.getAscendant lat Celestial.ObliquityEcliptic riseSiderealTime
-    let _ = printfn $"sun rise in {riseAsc}"
+    let sunEvents =
+        [ rise; noon; set]
 
-    let noonSiderealTime =
-        Celestial.localSiderealTime noon lon
-    let noonAsc =
-        Celestial.getAscendant lat Celestial.ObliquityEcliptic noonSiderealTime
-
-    let _ = printfn $"sun noon in {noonAsc}"
-
-    let setSiderealTime =
-        Celestial.localSiderealTime set lon
-    let setAsc =
-        Celestial.getAscendant lon Celestial.ObliquityEcliptic setSiderealTime
-
-    printfn $"sun set in {setAsc}"
+    let signs = gatherEventSigns lat lon [] sunEvents
+    printfn "%A" signs
 
     let! (forecastUri, forecastZone, fireWeatherZone) =
         Weather.gridInfo lat lon
     let! forecast = 
         Weather.gridForecast forecastUri
-        
-(*     let! pressure =
-        Weather.barometricPressure lat lon *)
 
     let! alerts =
         Weather.alerts forecastZone
     let! fireAlerts =
         Weather.alerts fireWeatherZone
 
-    printfn "%A" forecast.properties.periods.[0]
+    printfn "%A" forecast.properties.periods[0]
 (*     printfn "%s" pressure *)
     printfn "%A" alerts
     printfn "%A" fireAlerts
@@ -116,16 +130,16 @@ let headAsync cliArgs = task {
 let head (argv: string []) =
 
     let cliArgs =
-        match tryGetArgsFromEnv () with
-        | ValueNone -> cliArgsOfArgv argv
-        | ValueSome cliArgs -> cliArgs
-
+        match tryGetCliArgsOfArgv argv with
+        | ValueNone ->
+            match tryGetArgsFromEnv () with
+            | ValueNone -> invalidCliArgs ()
+            | ValueSome cliArgs -> cliArgs
+        | ValueSome cliArgs -> cliArgs 
 
     let task = headAsync cliArgs
-    
     task.GetAwaiter().GetResult()
-    
-    printfn "hello world"
+
     0
 
 try

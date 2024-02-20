@@ -105,14 +105,14 @@ module GeoCode =
             $"https://{ApiAuthority}{path}?{query}"
 
         let req =
-            req "GET" uri
+            Http.req "GET" uri
         
         let! resp = Http.retrieve req
         ensureOK resp
 
         let result =
             Json.deserialize<GeoCodeResult<AddressMatchResult>>
-            <| HttpResponse.strContent resp
+            <| Http.str resp
         
 
         let ret =
@@ -122,44 +122,8 @@ module GeoCode =
     }
 
 module Weather =
-    open System.Text.RegularExpressions
-    
+
     let private ApiAuthority = "api.weather.gov"
-
-    let private pressureRegex =
-        Regex(
-            "<td class=\"text-right\"><b>Barometer</b></td>\s*<td>(.*?)</td>",
-            RegexOptions.Compiled ||| RegexOptions.IgnoreCase
-        )
-
-    let barometricPressure (lat: double) (lon: double) = task {
-        invalidOp "they don't like this"
-        (* https://forecast.weather.gov/MapClick.php?lat=38.29595769399183&lon=-104.58785803656497 *)
-        let query =
-            [ pair<_,_> "lat" <| string lat 
-              pair<_,_> "lon" <| string lon ]
-            |> HttpUtils.urlEncodeSeq
-
-        let uri =
-            $"https://forecast.weather.gov/MapClick.php?{query}"
-            
-
-        let req =
-            req "GET" uri
-            |> HttpRequest.headers [ pair<_,_> "User-Agent" "weather toph.ght@gmail.com" ]
-
-        let! resp = Http.retrieve req
-        ensureOK resp
-        let html = HttpResponse.strContent resp
-        let m = pressureRegex.Match(html)
-        let pressure =
-            if m.Success then
-                m.Groups.[1].Value
-            else
-                invalidOp<string> "failed to parse barometric pressure value"
-
-        return pressure
-    }
 
     let gridInfo (lat: double) (lon: double) = task {
 
@@ -169,15 +133,15 @@ module Weather =
         let uri = $"https://{ApiAuthority}{path}"
 
         let req =
-            req "GET" uri
-            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
+            Http.req "GET" uri
+            |> Http.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
 
         let! resp = Http.retrieve req
         ensureOK resp
 
         let result =
             Json.deserialize<WeatherResult<WeatherPointsResult>> 
-            <| HttpResponse.strContent resp
+            <| Http.str resp
 
         return struct (
             result.properties.forecast,
@@ -189,15 +153,15 @@ module Weather =
     let gridForecast uri = task {
 
         let req =
-            req "GET" uri
-            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
+            Http.req "GET" uri
+            |> Http.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
 
         let! resp = Http.retrieve req
         ensureOK resp
 
         let result =
             Json.deserialize<WeatherResult<WeatherForecastResult>> 
-            <| HttpResponse.strContent resp
+            <| Http.str resp
 
         return result
     }
@@ -207,15 +171,15 @@ module Weather =
             $"https://api.weather.gov/alerts/active/zone/{zone}"
 
         let req =
-            req "GET" uri
-            |> HttpRequest.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
+            Http.req "GET" uri
+            |> Http.headers [pair<_,_> "User-Agent" "weather toph.ght@gmail.com"]
 
         let! resp = Http.retrieve req
         ensureOK resp
 
         let result = 
             Json.deserialize<WeatherFeaturesResult<WeatherAlertData>> 
-            <| HttpResponse.strContent resp
+            <| Http.str resp
 
       
         return result
