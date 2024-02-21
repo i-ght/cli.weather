@@ -36,7 +36,7 @@ type WeatherValue<'a when 'a : (new: unit -> 'a) and 'a: struct and 'a :> ValueT
   { unitCode: string
     value: 'a Nullable }
 
-type WeatherPeriodData =
+type WeatherPeriod =
     { number: int
       name: string
       startTime: DateTimeOffset
@@ -52,7 +52,7 @@ type WeatherPeriodData =
       shortForecast: string
       detailedForecast: string }
 
-type WeatherAlertData =
+type WeatherAlert =
     { sent: DateTimeOffset
       effective: DateTimeOffset
       onset: DateTimeOffset
@@ -77,7 +77,7 @@ type WeatherFeatures<'a> =
 
 type WeatherForecast =
     { updated: DateTimeOffset
-      periods: WeatherPeriodData [] }
+      periods: WeatherPeriod [] }
 
 [<AutoOpen>]
 module internal Convenience =
@@ -179,9 +179,8 @@ module Weather =
         ensureOK resp
 
         let result = 
-            Json.deserialize<WeatherFeatures<WeatherAlertData>> 
+            Json.deserialize<WeatherFeatures<WeatherAlert>> 
             <| Http.str resp
 
-      
         return result
     }

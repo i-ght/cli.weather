@@ -490,7 +490,7 @@ module Celestial =
         let f = atan e
 
         let mutable ascendant = f * 180.0 / Math.PI
-
+        
         // Modulation from wikipedia
         // https://en.wikipedia.org/wiki/Ascendant
         // Citation Peter Duffett-Smith, Jonathan Zwart, Practical astronomy with your calculator or spreadsheet-4th ed., p47, 2011

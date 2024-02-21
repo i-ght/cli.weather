@@ -119,7 +119,7 @@ let headAsync cliArgs = task {
     printfn "%A" alerts
     printfn "%A" fireAlerts
 
-    return 0
+    return ~0~
 }
 
 [<Struct>]
