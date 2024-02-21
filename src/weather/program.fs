@@ -3,7 +3,6 @@
 open weather.lib
 open std
 
-[<Struct>]
 type CliArgs =
     | Coordinates of coordinates: struct (float * float)
     | Address of address: string
@@ -19,22 +18,22 @@ let tryGetArgsFromEnv () =
     let tryGetLocalAddr () =
         Env.var "LOCAL_ADDRESS"
 
-    let rec tryGet names =
-        match names with
-        | ["LAT"; "LON"] :: tail ->
-            match tryGetLatLon () with
-            | (ValueSome lat, ValueSome lon) ->
-                ValueSome <| (Coordinates <| struct (float lat, float lon))
-            | _ ->
-                tryGet tail
-        | ["LOCAL_ADDRESS"] :: tail ->
-            match tryGetLocalAddr () with
-            | ValueSome localAddress ->
-                ValueSome <| (Address localAddress)
-            | _ -> 
-                ValueNone (* tryGet tail *)
+    let rec tryGet = function
+    | ["LAT"; "LON"] :: tail ->
+        match tryGetLatLon () with
+        | (ValueSome lat, ValueSome lon) ->
+            ValueSome <| (Coordinates <| struct (float lat, float lon))
         | _ ->
-            ValueNone
+            tryGet tail
+    | ["LOCAL_ADDRESS"] :: tail ->
+        match tryGetLocalAddr () with
+        | ValueSome localAddress ->
+            ValueSome <| (Address localAddress)
+        | _ -> 
+            ValueNone (* tryGet tail *)
+    | _ ->
+        ValueNone
+
     tryGet names
 
 type InvalidCliArgumentsException() =
@@ -91,18 +90,19 @@ let headAsync cliArgs = task {
 
     let _ = printfn $"{lat}, {lon}"
 
-    let now = DateTimeOffset.Now
+    let today = DateTimeOffset.Now
     let events =
-        Celestial.events lat lon now
+        Celestial.events lat lon today
     let struct (rise, noon, set) =
         events
 
     let _ = printfn "%A" events
 
     let sunEvents =
-        [ rise; noon; set]
+        [ rise; noon; set ]
 
-    let signs = gatherEventSigns lat lon [] sunEvents
+    let signs =
+        gatherEventSigns lat lon [] sunEvents
     printfn "%A" signs
 
     let! (forecastUri, forecastZone, fireWeatherZone) =
@@ -124,15 +124,28 @@ let headAsync cliArgs = task {
 
 }
 
+[<Struct>]
+type GetCliArgsPhase =
+    | AttemptArgv
+    | AttemptEnv
+
 let head (argv: string []) =
 
-    let cliArgs =
-        match tryGetCliArgsOfArgv argv with
-        | ValueNone ->
+    let rec tryGetArgs phase =
+        match phase with
+        | AttemptArgv -> 
+            match tryGetCliArgsOfArgv argv with
+            | ValueNone -> tryGetArgs AttemptEnv
+            | ValueSome cliArgs -> ValueSome cliArgs
+        | AttemptEnv ->
             match tryGetArgsFromEnv () with
-            | ValueNone -> invalidCliArgs ()
-            | ValueSome cliArgs -> cliArgs
-        | ValueSome cliArgs -> cliArgs 
+            | ValueNone -> ValueNone
+            | ValueSome cliArgs -> ValueSome cliArgs
+
+    let cliArgs =
+        match tryGetArgs AttemptArgv with
+        | ValueSome cliArgs -> cliArgs
+        | ValueNone -> invalidCliArgs ()
 
     let task = headAsync cliArgs
     task.GetAwaiter().GetResult()
