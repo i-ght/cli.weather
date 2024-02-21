@@ -116,41 +116,38 @@ let headAsync cliArgs = task {
         Weather.alerts fireWeatherZone
 
     printfn "%A" forecast.properties.periods[0]
-(*     printfn "%s" pressure *)
     printfn "%A" alerts
     printfn "%A" fireAlerts
 
-    return ()
-
+    return 0
 }
 
 [<Struct>]
 type GetCliArgsPhase =
-    | AttemptArgv
-    | AttemptEnv
+    | TryArgv
+    | TryEnv
 
 let head (argv: string []) =
 
     let rec tryGetArgs phase =
         match phase with
-        | AttemptArgv -> 
+        | TryArgv -> 
             match tryGetCliArgsOfArgv argv with
-            | ValueNone -> tryGetArgs AttemptEnv
+            | ValueNone -> tryGetArgs TryEnv
             | ValueSome cliArgs -> ValueSome cliArgs
-        | AttemptEnv ->
+        | TryEnv ->
             match tryGetArgsFromEnv () with
             | ValueNone -> ValueNone
             | ValueSome cliArgs -> ValueSome cliArgs
 
     let cliArgs =
-        match tryGetArgs AttemptArgv with
+        match tryGetArgs TryArgv with
         | ValueSome cliArgs -> cliArgs
         | ValueNone -> invalidCliArgs ()
 
-    let task = headAsync cliArgs
+    let task =
+        headAsync cliArgs
     task.GetAwaiter().GetResult()
-
-    0
 
 try
     Env.argv ()

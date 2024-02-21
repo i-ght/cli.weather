@@ -72,7 +72,7 @@ type WeatherAlertData =
       instruction: string
       response: string }
 
-type WeatherFeaturesResult<'a> =
+type WeatherFeatures<'a> =
     { features: 'a WeatherResponse [] }
 
 type WeatherForecast =
@@ -179,7 +179,7 @@ module Weather =
         ensureOK resp
 
         let result = 
-            Json.deserialize<WeatherFeaturesResult<WeatherAlertData>> 
+            Json.deserialize<WeatherFeatures<WeatherAlertData>> 
             <| Http.str resp
 
       
