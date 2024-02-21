@@ -25,7 +25,7 @@ let tryGetArgsFromEnv () =
             ValueSome <| (Coordinates <| struct (float lat, float lon))
         | _ ->
             tryGet tail
-    | ["LOCAL_ADDRESS"] :: tail ->
+    | ["LOCAL_ADDRESS"] :: [] ->
         match tryGetLocalAddr () with
         | ValueSome localAddress ->
             ValueSome <| (Address localAddress)
