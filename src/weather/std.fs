@@ -74,7 +74,8 @@ module Http =
             let sb = StringBuilder(text.Length + 255)
             for ch in text do
                 if ch = ' ' then
-                    sb.Append(ch) |> ignore<StringBuilder>
+                    sb.Append('+')
+                    |> ignore<StringBuilder>
                 else if UnreservedHttpChars.IndexOf(ch) = -1 then
                     sb.AppendFormat("%{0:X2}", int ch)
                     |> ignore<StringBuilder>
@@ -114,7 +115,7 @@ module Http =
             let reqMsg = new HttpRequestMessage(
                 HttpMethod.Parse(req.Method),
                 req.Uri,
-                Content=new ReadOnlyMemoryContent(req.Content)
+                Content=if req.Content.IsEmpty then null else  new ReadOnlyMemoryContent(req.Content)
             )
 
             for (name, value) in req.Headers do
@@ -131,13 +132,15 @@ module Http =
           Content=ReadOnlyMemory<byte>(content) }
 
     module Http =
-        let req = HttpRequest.construct
+    
+        let req method uri = HttpRequest.construct method uri
 
         let headers (headers: StringPair seq) (req: HttpRequest) =
             { req with Headers=headers}
 
         let str (response: HttpResponse) =
             Encoding.utf8Str response.Content.Span
+
         let retrieve (req: HttpRequest) = task {
             use handler = new HttpClientHandler()
 
@@ -490,7 +493,7 @@ module Celestial =
         let f = atan e
 
         let mutable ascendant = f * 180.0 / Math.PI
-        
+
         // Modulation from wikipedia
         // https://en.wikipedia.org/wiki/Ascendant
         // Citation Peter Duffett-Smith, Jonathan Zwart, Practical astronomy with your calculator or spreadsheet-4th ed., p47, 2011

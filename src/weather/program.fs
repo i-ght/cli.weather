@@ -7,7 +7,7 @@ type CliArgs =
     | Coordinates of coordinates: struct (float * float)
     | Address of address: string
 
-let tryGetArgsFromEnv () =
+let tryGetArgsOfEnv () =
     let names =
         [ ["LAT"; "LON"] 
           ["LOCAL_ADDRESS"] ]
@@ -86,7 +86,8 @@ let rec gatherEventSigns lat lon acc events =
 
 let headAsync cliArgs = task {
 
-    let! struct (lat, lon) = getLatLon cliArgs
+    let! struct (lat, lon) =
+        getLatLon cliArgs
 
     let _ = printfn $"{lat}, {lon}"
 
@@ -119,7 +120,7 @@ let headAsync cliArgs = task {
     printfn "%A" alerts
     printfn "%A" fireAlerts
 
-    return ~0~
+    return 0
 }
 
 [<Struct>]
@@ -136,7 +137,7 @@ let head (argv: string []) =
             | ValueNone -> tryGetArgs TryEnv
             | ValueSome cliArgs -> ValueSome cliArgs
         | TryEnv ->
-            match tryGetArgsFromEnv () with
+            match tryGetArgsOfEnv () with
             | ValueNone -> ValueNone
             | ValueSome cliArgs -> ValueSome cliArgs
 

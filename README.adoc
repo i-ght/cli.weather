@@ -1,0 +1,3 @@
+Get local weather data + warnings/alerts, calculate sun rise, noon and set, and get zodiac sign sun is rising in
+
+image::usage.png[]
